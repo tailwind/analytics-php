@@ -6,7 +6,7 @@ class AnalyticsTest extends PHPUnit_Framework_TestCase {
 
   function setUp() {
     date_default_timezone_set("UTC");
-    Segment::init("oq0vdlg7yi", array("debug" => true));
+    Segment::init("oq0vdlg7yi", array("debug" => true,'check_max_request_size'=>true));
   }
 
   function testTrack() {
@@ -186,5 +186,59 @@ class AnalyticsTest extends PHPUnit_Framework_TestCase {
       "timestamp" => ((string) mktime(0, 0, 0, date('n'), 1, date('Y'))) . '.'
     )));
   }
+
+
+    /**
+     *
+     * @expectedException SegmentException
+     */
+  function testCheckMaxRequestSizeBatch() {
+
+      $event = 'test-max-request-size-batch';
+
+      $parameters = [];
+
+      for($i=0;$i<300;$i++) {
+          // Add a random 16 character string
+          $parameters[]= substr(str_shuffle(str_repeat('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 16)), 0, 16);
+      }
+
+      /// Create 50 track calls
+      for($i=0;$i<150;$i++) {
+          $data = [
+              'userId'     => 'user-id',
+              'event'      => $event,
+              'properties' => $parameters,
+              'timestamp'  => time(),
+          ];
+
+          Segment::track($data);
+      }
+  }
+
+
+    /**
+     * @expectedException SegmentException
+     */
+    function testCheckMaxRequestSizeCall() {
+
+        $event = 'test-max-request-size-call';
+
+        $parameters = [];
+
+        for($i=0;$i<70;$i++) {
+            // Add a random 500 character string
+            $parameters[]= substr(str_shuffle(str_repeat('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 500)), 0, 500);
+        }
+
+        $data = [
+            'userId'     => 'user-id',
+            'event'      => $event,
+            'properties' => $parameters,
+            'timestamp'  => time(),
+        ];
+
+        Segment::track($data);
+    }
 }
 ?>

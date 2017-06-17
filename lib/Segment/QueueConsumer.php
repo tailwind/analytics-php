@@ -8,6 +8,23 @@ abstract class Segment_QueueConsumer extends Segment_Consumer {
   protected $batch_size = 100;
 
   /**
+   * There is a maximum of 500kb per batch request and 32kb per call.
+   *
+   * The API will return a 400 response for batch sizes that are over 500kb but
+   * will still return 200 if the individual calls are over 32kb. Unfortunately,
+   * those calls will silently fail.
+   *
+   * This option allows PHP to raise an error when request sizes are over the
+   * API set limit to avoid silently lost data.
+   *
+   * @see https://segment.com/docs/sources/server/http/#errors
+   */
+  protected $check_max_request_size = false;
+
+  const MAX_REQUEST_CALL_SIZE_LIMIT = 32000;
+  const MAX_REQUEST_BATCH_SIZE_LIMIT = 500000;
+
+  /**
    * Store our secret and options as part of this consumer
    * @param string $secret
    * @param array  $options
@@ -20,6 +37,9 @@ abstract class Segment_QueueConsumer extends Segment_Consumer {
 
     if (isset($options["batch_size"]))
       $this->batch_size = $options["batch_size"];
+
+    if (isset($options["check_max_request_size"]))
+      $this->check_max_request_size = $options["check_max_request_size"];
 
     $this->queue = array();
   }
@@ -89,17 +109,35 @@ abstract class Segment_QueueConsumer extends Segment_Consumer {
     return $this->enqueue($message);
   }
 
-  /**
-   * Adds an item to our queue.
-   * @param  mixed   $item
-   * @return boolean whether call has succeeded
-   */
+    /**
+     * Adds an item to our queue.
+     * @param  mixed $item
+     * @return bool whether call has succeeded
+     * @throws SegmentException
+     */
   protected function enqueue($item) {
 
     $count = count($this->queue);
 
     if ($count > $this->max_queue_size) {
       return false;
+    }
+
+    /**
+     * There is a maximum of 500kb per batch request and 32kb per call.
+     *
+     * If checking for the max request size is enabled, we'll want to ensure
+     * that the call payload is less than 32kb.
+     *
+     * @see https://segment.com/docs/sources/server/http/#errors
+     */
+    if ($this->check_max_request_size) {
+
+        if ($call_size = strlen(json_encode($item)) >= self::MAX_REQUEST_CALL_SIZE_LIMIT ) {
+            throw new SegmentException(
+                "The call exceeds batch import limits ($call_size bytes)"
+            );
+        }
     }
 
     $count = array_push($this->queue, $item);
@@ -134,15 +172,37 @@ abstract class Segment_QueueConsumer extends Segment_Consumer {
   /**
    * Given a batch of messages the method returns
    * a valid payload.
-   * 
+   *
    * @param {Array} batch
    * @return {Array}
+   * @throws SegmentException
    **/
   protected function payload($batch){
-    return array(
+
+    $payload =  array(
       "batch" => $batch,
       "sentAt" => date("c"),
     );
+
+      /**
+       * There is a maximum of 500kb per batch request and 32kb per call.
+       *
+       * If checking for the max request size is enabled, we'll want to ensure
+       * that the entire payload is less than 500kb.
+       *
+       * @see https://segment.com/docs/sources/server/http/#errors
+       */
+      if ($this->check_max_request_size) {
+
+          if ($batch_size = strlen(json_encode($payload)) >= self::MAX_REQUEST_BATCH_SIZE_LIMIT ) {
+              throw new SegmentException(
+                  "The batch exceeds batch import limits ($batch_size bytes)"
+              );
+          }
+
+      }
+
+      return $payload;
   }
 
   /**
