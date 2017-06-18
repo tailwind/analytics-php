@@ -6,7 +6,6 @@ require_once(__DIR__ . '/Consumer/File.php');
 require_once(__DIR__ . '/Consumer/ForkCurl.php');
 require_once(__DIR__ . '/Consumer/LibCurl.php');
 require_once(__DIR__ . '/Consumer/Socket.php');
-require_once(__DIR__ . '/SegmentException.php');
 require_once(__DIR__ . '/Version.php');
 
 class Segment_Client {

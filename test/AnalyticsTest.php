@@ -226,18 +226,26 @@ class AnalyticsTest extends PHPUnit_Framework_TestCase {
     }
 
 
-    /**
-     * @expectedException SegmentException
-     */
-    function testCheckMaxRequestSizeCall() {
+    function testCheckMaxRequestSizeCall()
+    {
+        $error_handler_invoked = false;
+
+        Segment::init(
+            "oq0vdlg7yi",
+            array(
+                "debug"                  => false,
+                'check_max_request_size' => true,
+                "error_handler"          => function ($code, $msg) use (&$error_handler_invoked) { $error_handler_invoked = true; },
+            )
+        );
 
         $event = 'test-max-request-size-call';
 
         $parameters = [];
 
-        for($i=0;$i<70;$i++) {
-            // Add a random 500 character string
-            $parameters[]= substr(str_shuffle(str_repeat('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 500)), 0, 500);
+        // Add 70 random 500 character strings to parameters list
+        for ( $i = 0; $i < 70; $i++ ) {
+            $parameters[] = substr(str_shuffle(str_repeat('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 500)), 0, 500);
         }
 
         $data = [
@@ -248,6 +256,8 @@ class AnalyticsTest extends PHPUnit_Framework_TestCase {
         ];
 
         Segment::track($data);
+
+        $this->assertTrue($error_handler_invoked, 'The error handler was not invoked when a call over 32kb was added.');
     }
 }
 ?>
