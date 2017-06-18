@@ -157,11 +157,62 @@ abstract class Segment_QueueConsumer extends Segment_Consumer {
 
     $count = count($this->queue);
     $success = true;
+    $batch_size = $this->batch_size;
 
     while($count > 0 && $success) {
 
-      $batch = array_splice($this->queue, 0, min($this->batch_size, $count));
-      $success = $this->flushBatch($batch);
+        /*
+         * We use array_slice to non destructively get a batch from the queued
+         * array of calls. In the event that the batch is too big, we will try
+         * with a smaller batch size.
+         */
+        $batch = array_slice($this->queue, 0, min($batch_size, $count));
+
+        $body = $this->payload($batch);
+        $payload = json_encode($body);
+
+        /**
+         * There is a maximum of 500kb per batch request and 32kb per call.
+         *
+         * If checking for the max request size is enabled, we'll want to ensure
+         * that the entire payload is less than 500kb.
+         *
+         * If it is over 500kb, we retry at a smaller batch size until it's under
+         * the limit.
+         *
+         * @see https://segment.com/docs/sources/server/http/#max-request-size
+         */
+        if ($this->check_max_request_size) {
+
+            if ($payload_size = strlen($payload) >= self::MAX_REQUEST_BATCH_SIZE_LIMIT ) {
+
+                /*
+                 * If the payload size is too large with only 1 call in it then
+                 * there isn't anything else we can do but report it as an error.
+                 */
+                if ($batch_size == 1) {
+
+                    $this->handleError(400, "The batch size is over the API limit ($payload_size bytes)");
+
+                    return false;
+                }
+
+                /*
+                 * Reduce the batch size and try again
+                 */
+                $batch_size--;
+                continue;
+            }
+        }
+
+      /*
+       * Now that we're sure this is the payload we want to use and that it is
+       * within the max batch request size limit, we'll remove the calls from
+       * the queue using array_splice.
+       */
+      array_splice($this->queue, 0, min($batch_size, $count));
+
+      $success = $success && $this->flushBatch($payload);
 
       $count = count($this->queue);
     }
@@ -178,37 +229,16 @@ abstract class Segment_QueueConsumer extends Segment_Consumer {
    * @throws SegmentException
    **/
   protected function payload($batch){
-
-    $payload =  array(
+    return array(
       "batch" => $batch,
       "sentAt" => date("c"),
     );
-
-      /**
-       * There is a maximum of 500kb per batch request and 32kb per call.
-       *
-       * If checking for the max request size is enabled, we'll want to ensure
-       * that the entire payload is less than 500kb.
-       *
-       * @see https://segment.com/docs/sources/server/http/#errors
-       */
-      if ($this->check_max_request_size) {
-
-          if ($batch_size = strlen(json_encode($payload)) >= self::MAX_REQUEST_BATCH_SIZE_LIMIT ) {
-              throw new SegmentException(
-                  "The batch exceeds batch import limits ($batch_size bytes)"
-              );
-          }
-
-      }
-
-      return $payload;
   }
 
   /**
    * Flushes a batch of messages.
-   * @param  [type] $batch [description]
+   * @param  string $payload JSON payload of the batch
    * @return [type]        [description]
    */
-  abstract function flushBatch($batch);
+  abstract function flushBatch($payload);
 }

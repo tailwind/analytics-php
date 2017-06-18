@@ -187,34 +187,43 @@ class AnalyticsTest extends PHPUnit_Framework_TestCase {
     )));
   }
 
+    function testCheckMaxRequestSizeBatch()
+    {
+        $error_handler_invoked = false;
 
-    /**
-     *
-     * @expectedException SegmentException
-     */
-  function testCheckMaxRequestSizeBatch() {
+        Segment::init(
+            "oq0vdlg7yi",
+            array(
+                "debug"                  => false,
+                "batch_size"             => 100,
+                'check_max_request_size' => true,
+                "error_handler"          => function ($code, $msg) use (&$error_handler_invoked) { $error_handler_invoked = true; },
+            )
+        );
 
-      $event = 'test-max-request-size-batch';
+        $event = 'test-max-request-size-batch';
 
-      $parameters = [];
+        $parameters = [];
 
-      for($i=0;$i<300;$i++) {
-          // Add a random 16 character string
-          $parameters[]= substr(str_shuffle(str_repeat('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 16)), 0, 16);
-      }
+        // Add 300 random 16 character strings to list of parameters
+        for ( $i = 0; $i < 300; $i++ ) {
+            $parameters[] = substr(str_shuffle(str_repeat('0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 16)), 0, 16);
+        }
 
-      /// Create 50 track calls
-      for($i=0;$i<150;$i++) {
-          $data = [
-              'userId'     => 'user-id',
-              'event'      => $event,
-              'properties' => $parameters,
-              'timestamp'  => time(),
-          ];
+        /// Create 150 track calls
+        for ( $i = 0; $i < 150; $i++ ) {
+            $data = [
+                'userId'     => 'user-id',
+                'event'      => $event,
+                'properties' => $parameters,
+                'timestamp'  => time(),
+            ];
 
-          Segment::track($data);
-      }
-  }
+            Segment::track($data);
+        }
+
+        $this->assertFalse($error_handler_invoked);
+    }
 
 
     /**
