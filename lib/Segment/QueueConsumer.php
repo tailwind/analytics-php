@@ -19,7 +19,7 @@ abstract class Segment_QueueConsumer extends Segment_Consumer {
    *
    * @see https://segment.com/docs/sources/server/http/#max-request-size
    */
-  protected $check_max_request_size = false;
+  protected $check_max_request_size = true;
 
   const MAX_REQUEST_CALL_SIZE_LIMIT = 32000;
   const MAX_REQUEST_BATCH_SIZE_LIMIT = 500000;
