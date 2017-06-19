@@ -200,7 +200,7 @@ abstract class Segment_QueueConsumer extends Segment_Consumer {
                 /*
                  * Reduce the batch size and try again
                  */
-                $batch_size--;
+                $batch_size = round($batch_size / 2);
                 continue;
             }
         }
